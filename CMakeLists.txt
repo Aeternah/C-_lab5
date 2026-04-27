@@ -1,65 +1,81 @@
-cmake_minimum_required(VERSION 3.7.2)
+cmake_minimum_required(VERSION 3.10)
+
 set(PATCH_VERSION "1" CACHE INTERNAL "Patch version")
-set(PROJECT_VERSION 0.0.${PATCH_VERSION})
-project(physics VERSION ${PROJECT_VERSION})
+set(PROJECT_VERSION_FULL 1.0.${PATCH_VERSION})
+
+project(physics VERSION ${PROJECT_VERSION_FULL})
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CPACK_PROJECT_NAME physics)
-# Пытаемся найти предустановленный SFML
-find_package(SFML COMPONENTS graphics)
 
+# Очищаем кэш если поменялся генератор
+if(CMAKE_GENERATOR)
+    message(STATUS "Using generator: ${CMAKE_GENERATOR}")
+endif()
 
-# скачивание SFML
-if (SFML_FOUND)
-    message(STATUS "The SFML installed in the system will be used")
-else ()
-# Если SFML не найден - выкачиваем и собираем из исходников
-    message(STATUS "Get SFML from the source code")
+# Windows - собираем SFML из исходников (2.6.1)
+# Linux - используем системную SFML
+if(WIN32)
+    message(STATUS "Windows: Building SFML from source")
+    
     include(FetchContent)
+    
+    # Отключаем предупреждения и фиксим кэш
+    set(FETCHCONTENT_QUIET OFF)
+    
     FetchContent_Declare(SFML
-            GIT_REPOSITORY https://github.com/SFML/SFML.git
-            GIT_TAG 2.6.x)
+        GIT_REPOSITORY https://github.com/SFML/SFML.git
+        GIT_TAG 2.6.1
+        GIT_SHALLOW TRUE)
+    
     set(SFML_BUILD_AUDIO OFF CACHE BOOL "" FORCE)
     set(SFML_BUILD_NETWORK OFF CACHE BOOL "" FORCE)
+    set(SFML_BUILD_GRAPHICS ON CACHE BOOL "" FORCE)
+    set(SFML_BUILD_WINDOW ON CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-    # Обход потенциальных проблем при сборке sfml-graphics
-    # (stb_image.h: 'argument': conversion from 'int' to 'short')
-    set(WARNINGS_AS_ERRORS FALSE CACHE BOOL "" FORCE)
+    
+    # Принудительно используем тот же генератор
+    set(FETCHCONTENT_FULLY_DISCONNECTED OFF)
+    
     FetchContent_MakeAvailable(SFML)
-endif ()
+else()
+    find_package(SFML COMPONENTS graphics window system REQUIRED)
+endif()
 
-# для использования M_PI
-if (MSVC)
-    add_definitions(-D_USE_MATH_DEFINES)
-endif ()
-
-# добавление исполняемого файла
 add_executable(physics
-        main.cpp World.cpp Ball.cpp Physics.cpp Color.cpp Painter.cpp Dust.cpp
-        black_box/Application.cpp black_box/View.cpp black_box/PainterImpl.cpp)
+    main.cpp World.cpp Ball.cpp Physics.cpp Color.cpp Painter.cpp
+    black_box/Application.cpp black_box/View.cpp black_box/PainterImpl.cpp Dust.cpp)
 
-# связывание с SFML
-target_link_libraries(physics PRIVATE sfml-graphics)
-
-if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")  # Флаг для компилятора MSVC (Windows)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
-else() # Флаг для g++ и clang++ (Linux, MacOS) 
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+if(WIN32)
+    target_link_libraries(physics PRIVATE sfml-graphics)
+else()
+    target_link_libraries(physics PRIVATE sfml-graphics sfml-window sfml-system)
 endif()
 
 target_compile_options(physics PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/W4>
-        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>)
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>)
 
-# установка исполняемого файла
+if(WIN32)
+    set_target_properties(physics PROPERTIES OUTPUT_NAME "physics-${PROJECT_VERSION}-Windows")
+else()
+    set_target_properties(physics PROPERTIES OUTPUT_NAME "physics-${PROJECT_VERSION}-Linux")
+endif()
+
 install(TARGETS physics DESTINATION bin)
 
-# настройка CPack
-set(CPACK_GENERATOR "ZIP;DEB")
-set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
-set(CPACK_PACKAGE_NAME "physics")
-set(CPACK_PACKAGE_DESCRIPTION "Описание вашего проекта")
-set(CPACK_PACKAGE_VENDOR "Ваше имя или компания")
-set(CPACK_PACKAGE_CONTACT "Ваш контактный email")
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+set(CPACK_PACKAGE_CONTACT "example@example.com")
+set(CPACK_PACKAGE_NAME ${PROJECT_NAME})
+
+if(WIN32)
+    set(CPACK_GENERATOR ZIP)
+    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-Windows")
+else()
+    set(CPACK_GENERATOR "TGZ;DEB")
+    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-Linux")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
+endif()
+
 include(CPack)
