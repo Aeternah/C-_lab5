@@ -1,64 +1,65 @@
-cmake_minimum_required(VERSION 3.10)
-
+cmake_minimum_required(VERSION 3.7.2)
 set(PATCH_VERSION "1" CACHE INTERNAL "Patch version")
-set(PROJECT_VERSION_FULL 1.0.${PATCH_VERSION})
-
-project(physics VERSION ${PROJECT_VERSION_FULL})
+set(PROJECT_VERSION 0.0.${PATCH_VERSION})
+project(physics VERSION ${PROJECT_VERSION})
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CPACK_PROJECT_NAME physics)
+# Пытаемся найти предустановленный SFML
+find_package(SFML COMPONENTS graphics)
 
-# Всегда используем SFML 2.6.1 (стабильная версия)
-message(STATUS "Building SFML 2.6.1 from source (stable)")
 
-include(FetchContent)
-FetchContent_Declare(SFML
-    GIT_REPOSITORY https://github.com/SFML/SFML.git
-    GIT_TAG 2.6.1
-    GIT_SHALLOW TRUE)
+# скачивание SFML
+if (SFML_FOUND)
+    message(STATUS "The SFML installed in the system will be used")
+else ()
+# Если SFML не найден - выкачиваем и собираем из исходников
+    message(STATUS "Get SFML from the source code")
+    include(FetchContent)
+    FetchContent_Declare(SFML
+            GIT_REPOSITORY https://github.com/SFML/SFML.git
+            GIT_TAG 2.6.x)
+    set(SFML_BUILD_AUDIO OFF CACHE BOOL "" FORCE)
+    set(SFML_BUILD_NETWORK OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    # Обход потенциальных проблем при сборке sfml-graphics
+    # (stb_image.h: 'argument': conversion from 'int' to 'short')
+    set(WARNINGS_AS_ERRORS FALSE CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(SFML)
+endif ()
 
-set(SFML_BUILD_AUDIO OFF CACHE BOOL "" FORCE)
-set(SFML_BUILD_NETWORK OFF CACHE BOOL "" FORCE)
-set(SFML_BUILD_GRAPHICS ON CACHE BOOL "" FORCE)
-set(SFML_BUILD_WINDOW ON CACHE BOOL "" FORCE)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-
-FetchContent_MakeAvailable(SFML)
-
+# для использования M_PI
 if (MSVC)
     add_definitions(-D_USE_MATH_DEFINES)
-endif()
+endif ()
 
+# добавление исполняемого файла
 add_executable(physics
-    main.cpp World.cpp Ball.cpp Physics.cpp Color.cpp Painter.cpp
-    black_box/Application.cpp black_box/View.cpp black_box/PainterImpl.cpp Dust.cpp)
+        main.cpp World.cpp Ball.cpp Physics.cpp Color.cpp Painter.cpp Dust.cpp
+        black_box/Application.cpp black_box/View.cpp black_box/PainterImpl.cpp)
 
+# связывание с SFML
 target_link_libraries(physics PRIVATE sfml-graphics)
 
-target_compile_options(physics PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/W4>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>)
-
-if(WIN32)
-    set_target_properties(physics PROPERTIES OUTPUT_NAME "physics-${PROJECT_VERSION}-Windows")
-elseif(UNIX)
-    set_target_properties(physics PROPERTIES OUTPUT_NAME "physics-${PROJECT_VERSION}-Linux")
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")  # Флаг для компилятора MSVC (Windows)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
+else() # Флаг для g++ и clang++ (Linux, MacOS) 
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 endif()
 
+target_compile_options(physics PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>)
+
+# установка исполняемого файла
 install(TARGETS physics DESTINATION bin)
 
-set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
-set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
-set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
-set(CPACK_PACKAGE_CONTACT "example@example.com")
-set(CPACK_PACKAGE_NAME ${PROJECT_NAME})
-
-if(WIN32)
-    set(CPACK_GENERATOR ZIP)
-    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-Windows")
-elseif(UNIX)
-    set(CPACK_GENERATOR DEB)
-    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-Linux")
-    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
-endif()
-
+# настройка CPack
+set(CPACK_GENERATOR "ZIP;DEB")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_NAME "physics")
+set(CPACK_PACKAGE_DESCRIPTION "Описание вашего проекта")
+set(CPACK_PACKAGE_VENDOR "Ваше имя или компания")
+set(CPACK_PACKAGE_CONTACT "Ваш контактный email")
 include(CPack)

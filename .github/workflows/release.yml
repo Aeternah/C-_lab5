@@ -18,7 +18,17 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libsfml-dev cmake build-essential
+          sudo apt-get install -y \
+            libsfml-dev \
+            cmake \
+            build-essential \
+            libudev-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxinerama-dev \
+            libgl1-mesa-dev
 
       - name: Configure CMake
         run: |
@@ -31,6 +41,15 @@ jobs:
         run: |
           cmake --build build --target package
 
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: physics-ubuntu-${{ github.run_number }}
+          path: |
+            build/*.deb
+            build/*.tar.gz
+            build/*.tar.xz
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
@@ -42,6 +61,7 @@ jobs:
           files: |
             build/*.deb
             build/*.tar.gz
+            build/*.tar.xz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -78,6 +98,14 @@ jobs:
         shell: msys2 {0}
         run: |
           cmake --build build --target package
+
+      - name: Upload Artifacts (Windows)
+        uses: actions/upload-artifact@v4
+        with:
+          name: physics-windows-${{ github.run_number }}
+          path: |
+            build/*.zip
+            build/*.exe
 
       - name: Create Release (Windows)
         id: create_release_windows
