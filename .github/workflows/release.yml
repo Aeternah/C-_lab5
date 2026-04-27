@@ -1,4 +1,4 @@
-name: 'C++ CI'
+name: C++ CI
 
 on:
   push:
@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions: write-all
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
 
@@ -19,10 +19,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libsfml-dev cmake build-essential
-
-      - name: List Files
-        run: |
-          ls -R
 
       - name: Configure CMake
         run: |
@@ -35,84 +31,63 @@ jobs:
         run: |
           cmake --build build --target package
 
-      - name: List Files in Build Directory
-        run: |
-          ls -R build
-
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ github.run_number }}
-          release_name: Release ${{ github.run_number }} (Ubuntu)
+          name: Release ${{ github.run_number }} (Ubuntu)
           draft: false
           prerelease: false
-
-      - name: Upload Release Asset
-        id: upload-release-asset-ubuntu
-        uses: actions/upload-release-asset@v1
+          files: |
+            build/*.deb
+            build/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./build/physics-0.0.${{ github.run_number }}-Linux.deb     
-          asset_name: physics-0.0.${{ github.run_number }}-Linux.deb
-          asset_content_type: application/vnd.debian.binary-package
-          allowUpdates: true
 
   build_windows:
     runs-on: windows-latest
     permissions: write-all
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
 
-      # Установка SFML
-      - name: Install SFML
-        id: sfml
-        uses: oprypin/install-sfml@v1
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
         with:
-          sfml: 2.6.1  # Укажите нужную версию SFML
-          config: Release
+          msystem: MINGW64
+          update: true
+          install: >
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-sfml
 
-      - name: Configure CMake
+      - name: Configure CMake (Windows)
+        shell: msys2 {0}
         run: |
-          cmake . -DPATCH_VERSION=${{ github.run_number }} -DSFML_DIR="${{ steps.sfml.outputs.path }}"
+          cmake -S. -B build -G "MinGW Makefiles" -DPATCH_VERSION=${{ github.run_number }}
 
-      - name: Build project
-        run: cmake --build .
-
-      - name: Move Resources to Build Directory
+      - name: Build Project (Windows)
+        shell: msys2 {0}
         run: |
-          if not exist build mkdir build
-          xcopy /s resources build\
-        shell: cmd
-        
-      - name: Package Project
-        run: |
-          cmake --build . --target package
+          cmake --build build
 
-      - name: Create Release (windows)
+      - name: Package Project (Windows)
+        shell: msys2 {0}
+        run: |
+          cmake --build build --target package
+
+      - name: Create Release (Windows)
         id: create_release_windows
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: windows${{ github.run_number }}
-          release_name: Release ${{ github.run_number }} (windows)
+          tag_name: windows-v${{ github.run_number }}
+          name: Release ${{ github.run_number }} (Windows)
           draft: false
           prerelease: false
-
-      - name: Upload Release Asset (windows)
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
+          files: |
+            build/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release_windows.outputs.upload_url }}
-          asset_path: ./physics-0.0.${{ github.run_number }}-win64.zip  # Убедитесь, что этот путь правильный
-          asset_name: physics-0.0.${{ github.run_number }}-win64.zip
-          asset_content_type: application/zip
